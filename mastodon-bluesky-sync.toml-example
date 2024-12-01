@@ -1,0 +1,28 @@
+[mastodon]
+# Your Mastodon instance URL
+base_url = "https://mastodon.social"
+# Get these from your Mastodon instance's developer settings
+client_id = ""
+client_secret = ""
+access_token = ""
+refresh_token = "none"
+# Set to true if you want to sync boosts/reblogs
+sync_reblogs = true
+# Optional: Add a hashtag that will be added to all synced posts
+sync_hashtag = ""
+# Set to true to automatically delete favorites older than 90 days
+delete_older_favs = false
+
+[bluesky]
+# Your Bluesky account email
+email = ""
+# Create an App Password in Bluesky settings
+app_password = ""
+# Set to true if you want to sync reposts
+sync_reposts = true
+# Optional: Add a hashtag that will be added to all synced posts
+sync_hashtag = ""
+# Set to true to automatically delete posts older than 90 days
+delete_older_posts = false
+# Set to true to automatically delete favorites older than 90 days
+delete_older_favs = false

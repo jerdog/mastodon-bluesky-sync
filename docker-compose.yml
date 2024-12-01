@@ -1,0 +1,8 @@
+version: '3'
+services:
+  mastodon-bluesky-sync:
+    build: .
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped
+    command: ["--config", "/app/config/mastodon-bluesky-sync.toml"]
