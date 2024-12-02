@@ -20,15 +20,32 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apt-get update && \
     apt-get install -y ca-certificates libssl3 && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /app/config /app/logs && \
+    chown -R nobody:nogroup /app
 
-# Copy the binary and config file from builder
-COPY --from=builder /usr/src/app/target/release/mastodon-bluesky-sync /app/mastodon-bluesky-sync
-COPY mastodon-bluesky-sync.toml /app/mastodon-bluesky-sync.toml
+# Copy the binary from builder
+COPY --from=builder /usr/src/app/target/release/mastodon-bluesky-sync /app/
 
-# Create a wrapper script to run the sync in a loop
-RUN echo '#!/bin/sh\nwhile true; do\n  /app/mastodon-bluesky-sync\n  echo "Waiting 2 minutes before next sync..."\n  sleep 200\ndone' > /app/run.sh && \
-    chmod +x /app/run.sh
+# Copy the config file
+COPY mastodon-bluesky-sync.toml /app/
 
-# Set the wrapper script as the entrypoint
+# Create the run script
+RUN echo '#!/bin/sh\n\
+# First run: skip existing posts\n\
+echo "First run: skipping existing posts..."\n\
+/app/mastodon-bluesky-sync --config /app/mastodon-bluesky-sync.toml --skip-existing-posts\n\
+\n\
+# Subsequent runs: check for new posts every 1 minute\n\
+echo "Starting continuous sync (every 1 minute)..."\n\
+while true; do\n\
+    /app/mastodon-bluesky-sync --config /app/mastodon-bluesky-sync.toml $EXTRA_ARGS\n\
+    echo "Waiting 1 minute before next sync..."\n\
+    sleep 60\n\
+done' > /app/run.sh && \
+    chmod +x /app/run.sh && \
+    chown nobody:nogroup /app/run.sh
+
+USER nobody
+
 ENTRYPOINT ["/app/run.sh"]

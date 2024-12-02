@@ -3,6 +3,19 @@ services:
   mastodon-bluesky-sync:
     build: .
     volumes:
-      - ./config:/app/config
+      # - ./config:/app/config
+      - ./logs:/app/logs
     restart: unless-stopped
-    command: ["--config", "/app/config/mastodon-bluesky-sync.toml"]
+    environment:
+      - DEBUG=${DEBUG:-false}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-0}
+      - RUST_LOG=${RUST_LOG:-info}
+      # Pass any additional arguments to the sync command
+      - EXTRA_ARGS=${EXTRA_ARGS:-}
+    command: >
+      sh -c '
+      if [ "$$DEBUG" = "true" ]; then
+        export RUST_LOG=debug,mastodon_bluesky_sync=trace,reqwest=debug,hyper=debug,bsky_sdk=debug,megalodon=debug;
+        export RUST_BACKTRACE=1;
+      fi;
+      /app/mastodon-bluesky-sync --config /app/mastodon-bluesky-sync.toml $$EXTRA_ARGS'
