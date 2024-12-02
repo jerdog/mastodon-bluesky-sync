@@ -20,6 +20,7 @@ use crate::registration::mastodon_register;
 use crate::sync::*;
 
 pub mod args;
+mod bluesky_video;
 mod config;
 mod delete_favs;
 mod delete_posts;
@@ -168,7 +169,7 @@ pub async fn run(args: Args) -> Result<()> {
 
     for toot in posts.toots {
         if !args.skip_existing_posts {
-            if let Err(e) = post_to_mastodon(&mastodon, &toot, args.dry_run).await {
+            if let Err(e) = post_to_mastodon(&*mastodon, &toot, args.dry_run).await {
                 eprintln!("Error posting toot to Mastodon: {e:#?}");
                 continue;
             }
@@ -209,7 +210,7 @@ pub async fn run(args: Args) -> Result<()> {
     }
 
     if config.mastodon.delete_old_favs {
-        delete_favs::mastodon_delete_older_favs(&mastodon, args.dry_run)
+        delete_favs::mastodon_delete_older_favs(&*mastodon, args.dry_run)
             .await
             .context("Failed to delete old Mastodon favourites")?;
     }
