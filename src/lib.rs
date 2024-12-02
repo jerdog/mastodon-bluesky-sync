@@ -62,7 +62,10 @@ pub async fn run(args: Args) -> Result<()> {
         None,
     )?;
     let account = match mastodon.verify_account_credentials().await {
-        Ok(account) => account,
+        Ok(account) => {
+            debug!("Connected to Mastodon as @{} ({})", account.json.username, account.json.url);
+            account
+        }
         Err(e) => {
             eprintln!("Error connecting to Mastodon: {e:#?}");
             process::exit(1);
@@ -122,6 +125,7 @@ pub async fn run(args: Args) -> Result<()> {
         .get_session()
         .await
         .context("Error getting Bluesky session")?;
+    debug!("Connected to Bluesky as @{:?}", bsky_session.handle);
     let bsky_statuses = match bsky_agent
         .api
         .app

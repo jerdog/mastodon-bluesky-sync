@@ -3,6 +3,7 @@ use bsky_sdk::api::app::bsky::embed::record::ViewRecordRefs;
 use bsky_sdk::api::app::bsky::feed::defs::{FeedViewPostData, PostViewData, PostViewEmbedRefs};
 use bsky_sdk::api::app::bsky::richtext::facet::MainFeaturesItem;
 use bsky_sdk::api::types::{Object, TryFromUnknown, Union};
+use log::debug;
 use megalodon::entities::Status;
 use regex::Regex;
 use std::collections::HashSet;
@@ -69,33 +70,41 @@ pub fn determine_posts(
     bsky_statuses: &[Object<FeedViewPostData>],
     options: &SyncOptions,
 ) -> StatusUpdates {
+    debug!("Starting determine_posts with {} Mastodon statuses and {} Bluesky posts", 
+           mastodon_statuses.len(), bsky_statuses.len());
+    
     let mut updates = StatusUpdates {
         bsky_posts: Vec::new(),
         toots: Vec::new(),
     };
     'bsky: for post in bsky_statuses {
+        debug!("Processing Bluesky post");
         // Skip replies, they are handled in determine_thread_replies().
         if let Some(_reply) = &post.reply {
+            debug!("Skipping Bluesky reply");
             continue;
         }
 
         if !options.sync_reposts {
             if let Some(_reskeet) = &post.post.viewer {
                 if let Some(_repost) = &_reskeet.repost {
-                    // Skip reskeets when sync_reposts is disabled
+                    debug!("Skipping Bluesky repost");
                     continue;
                 }
             }
         }
 
         for toot in mastodon_statuses {
+            debug!("Comparing with Mastodon toot: {}", &toot.content);
             // Skip replies because we don't want to sync them here.
             if let Some(_id) = &toot.in_reply_to_id {
+                debug!("Skipping Mastodon reply");
                 continue;
             }
             // If the post already exists we can stop here and know that we are
             // synced.
             if toot_and_post_are_equal(toot, post) {
+                debug!("Found matching toot and post");
                 break 'bsky;
             }
         }
@@ -103,11 +112,12 @@ pub fn determine_posts(
         // The post is not on Mastodon yet, check if we should post it.
         // Fetch the post text into a String object
         let decoded_post = bsky_post_unshorten_decode(post);
+        debug!("Decoded Bluesky post: {}", decoded_post);
 
         // Check if hashtag filtering is enabled and if the post matches.
         if let Some(sync_hashtag) = &options.sync_hashtag_bluesky {
             if !sync_hashtag.is_empty() && !decoded_post.contains(sync_hashtag) {
-                // Skip if a sync hashtag is set and the string doesn't match.
+                debug!("Skipping Bluesky post due to hashtag filter");
                 continue;
             }
         }
@@ -118,16 +128,19 @@ pub fn determine_posts(
             replies: Vec::new(),
             in_reply_to_id: None,
         });
+        debug!("Added new toot for sync");
     }
 
     'toots: for toot in mastodon_statuses {
+        debug!("Processing Mastodon toot: {}", &toot.content);
         // Skip replies, they are handled in determine_thread_replies().
         if let Some(_id) = &toot.in_reply_to_id {
+            debug!("Skipping Mastodon reply");
             continue;
         }
 
         if toot.reblog.is_some() && !options.sync_reblogs {
-            // Skip reblogs when sync_reblogs is disabled
+            debug!("Skipping Mastodon reblog");
             continue;
         }
         let fulltext = mastodon_toot_get_text(toot);
@@ -136,15 +149,19 @@ pub fn determine_posts(
             None => bsky_post_shorten(&fulltext, &toot.url),
             Some(reblog) => bsky_post_shorten(&fulltext, &reblog.url),
         };
+        debug!("Processed Mastodon toot text: {}", post);
         // Skip direct toots to other Mastodon users, even if they are public.
         if post.starts_with('@') {
+            debug!("Skipping Mastodon direct toot");
             continue;
         }
 
         for bsky_post in bsky_statuses {
+            debug!("Comparing with Bluesky post");
             // If the toot already exists we can stop here and know that we are
             // synced.
             if toot_and_post_are_equal(toot, bsky_post) {
+                debug!("Found matching toot and post");
                 break 'toots;
             }
         }
@@ -153,7 +170,7 @@ pub fn determine_posts(
         // Check if hashtag filtering is enabled and if the post matches.
         if let Some(sync_hashtag) = &options.sync_hashtag_mastodon {
             if !sync_hashtag.is_empty() && !fulltext.contains(sync_hashtag) {
-                // Skip if a sync hashtag is set and the string doesn't match.
+                debug!("Skipping Mastodon post due to hashtag filter");
                 continue;
             }
         }
@@ -164,6 +181,7 @@ pub fn determine_posts(
             replies: Vec::new(),
             in_reply_to_id: None,
         });
+        debug!("Added new Bluesky post for sync");
     }
 
     //determine_thread_replies(mastodon_statuses, bsky_statuses, options, &mut updates);
@@ -171,17 +189,9 @@ pub fn determine_posts(
     // Older posts should come first to preserve the ordering of posts to
     // synchronize.
     updates.reverse_order();
+    debug!("Returning {} new toots and {} new Bluesky posts for sync", updates.toots.len(), updates.bsky_posts.len());
     updates
 }
-
-/*fn bsky_post_is_reply(post: &Object<FeedViewPostData>) -> bool {
-    if let Some(_reskeet) = &post.post.viewer {
-        if let Some(_repost) = _reskeet.repost {
-            // Skip retweets when sync_retweets is disabled
-            continue;
-        }
-    }
-}*/
 
 // Returns true if a Mastodon toot and a Bluesky post are considered equal.
 pub fn toot_and_post_are_equal(toot: &Status, bsky_post: &Object<FeedViewPostData>) -> bool {
@@ -366,8 +376,12 @@ pub fn filter_posted_before(
     posts: StatusUpdates,
     post_cache: &HashSet<String>,
 ) -> Result<StatusUpdates> {
+    debug!("Starting filter_posted_before with {} toots and {} Bluesky posts", 
+           posts.toots.len(), posts.bsky_posts.len());
+    
     // If there are no status updates then we don't need to check anything.
     if posts.toots.is_empty() && posts.bsky_posts.is_empty() {
+        debug!("No posts to filter");
         return Ok(posts);
     }
 
@@ -377,22 +391,23 @@ pub fn filter_posted_before(
     };
     for post in posts.bsky_posts {
         if post_cache.contains(&post.text) {
-            eprintln!("Error: preventing double posting to Bluesky: {}", post.text);
+            debug!("Preventing double posting to Bluesky: {}", post.text);
         } else {
+            debug!("Adding new Bluesky post for sync: {}", post.text);
             filtered_posts.bsky_posts.push(post.clone());
         }
     }
     for toot in posts.toots {
         if post_cache.contains(&toot.text) {
-            eprintln!(
-                "Error: preventing double posting to Mastodon: {}",
-                toot.text
-            );
+            debug!("Preventing double posting to Mastodon: {}", toot.text);
         } else {
+            debug!("Adding new Mastodon toot for sync: {}", toot.text);
             filtered_posts.toots.push(toot.clone());
         }
     }
 
+    debug!("Returning {} filtered toots and {} filtered Bluesky posts", 
+           filtered_posts.toots.len(), filtered_posts.bsky_posts.len());
     Ok(filtered_posts)
 }
 
