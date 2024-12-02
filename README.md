@@ -1,5 +1,7 @@
 # Mastodon Bluesky Sync
 
+[![Automated tests](https://github.com/klausi/mastodon-bluesky-sync/workflows/Testing/badge.svg)](https://github.com/klausi/mastodon-bluesky-sync/actions)
+
 This tool synchronizes posts from [Mastodon](https://joinmastodon.org/) to [Bluesky](https://bsky.app) and back. It does not matter where you post your stuff - it will get synchronized to the other!
 
 ## Synchronization Features
@@ -92,3 +94,6 @@ Todo list for the future, not implemented yet:
 - Improve Mastodon character counting, links only count for 23 characters
 - Parallel execution of fetching and syncing requests at the same time
 
+## Acknowledgements
+
+Thanks to [Yoshihiro Sugi (sugyan)](https://github.com/sugyan) for his continuous support when implementing Bluesky API access with [Atrium](https://github.com/sugyan/atrium).
